@@ -1,0 +1,14 @@
+{
+  "name": "l-con",
+  "version": "0.1.0",
+  "private": true,
+  "description": "L-con — Lemonade Cognitive Contract. Slider panel that compiles a short system prompt without touching model weights.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
