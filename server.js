@@ -146,7 +146,8 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "GET" && url.pathname === "/api/state") {
       const state = loadState();
-      send(res, 200, { ...state, compiled: compiledFrom(state), limits: LIMITS, presets: PRESETS });
+      state.compiled = compiledFrom(state);
+      send(res, 200, { ...state, limits: LIMITS, presets: PRESETS });
       return;
     }
     if (req.method === "PUT" && url.pathname === "/api/state") {

@@ -132,7 +132,7 @@ function renderPresets() {
     b.title = p.blurb;
     b.textContent = p.name;
     b.addEventListener("click", () => {
-      state.intent = p.example.slice(0, 160);
+      state.intent = p.intent || p.example.slice(0, 160);
       state.dump = p.example;
       state.knobs = { ...p.knobs };
       paint();
