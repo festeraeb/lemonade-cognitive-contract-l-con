@@ -110,8 +110,24 @@ function compiledFrom(state) {
 async function proxyChat(req, res, state) {
   const body = await readBody(req);
   const compiled = compiledFrom(state);
-  const messages = Array.isArray(body.messages) ? body.messages.slice() : [];
-  const injected = [{ role: "system", content: compiled.prompt }, ...messages];
+  const injected = Array.isArray(body.messages) ? body.messages.slice() : [];
+  const totalChars = compiled.chars + injected.reduce((s, m) => s + String(m?.content || "").length, 0);
+  const maxPayload = Number(process.env.LCON_MAX_PROXY_CHARS) || LIMITS.messagesChars || 16000;
+  if (totalChars > maxPayload) {
+    send(res, 400, { error: "Payload too large", code: "too_much", field: "Messages", limit: maxPayload });
+    return;
+  }
+  // Prepend the contract, but never drop the client's conversation. If the
+  // client already sent a leading system message, merge the contract into it
+  // instead of stacking a second system turn (a second one gets ignored by the
+  // template and silences the contract). Either way the rest of `injected`
+  // keeps every original message in order.
+  if (injected.length > 0 && injected[0]?.role === "system") {
+    const prior = String(injected[0].content || "");
+    injected[0] = { ...injected[0], content: `${compiled.prompt}\n\n${prior}` };
+  } else {
+    injected.unshift({ role: "system", content: compiled.prompt });
+  }
   const base = String(state.lemonade.base || "").replace(/\/$/, "");
   const payload = {
     ...body,
@@ -207,7 +223,13 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && serveStatic(req, res)) return;
     send(res, 404, { error: "not found" });
   } catch (err) {
-    send(res, err.status || 500, { error: err.message, code: err.code || "error" });
+    // Surface undici's real cause — err.message alone is just "fetch failed".
+    if (err?.cause) console.error("[l-con] upstream error:", err.cause);
+    send(res, err.status || 500, {
+      error: err.message,
+      code: err.code || "error",
+      cause: err?.cause?.code || err?.cause?.message,
+    });
   }
 });
 
