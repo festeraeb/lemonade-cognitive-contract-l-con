@@ -1,5 +1,8 @@
 const $ = (id) => document.getElementById(id);
 
+// Works both at site root (/) and under a subpath (/lcon/) behind a proxy.
+const BASE = location.pathname.replace(/\/[^/]*$/, "");
+
 const state = {
   name: "",
   intent: "",
@@ -9,9 +12,14 @@ const state = {
   keep: [],
   drop: [],
   compiled: null,
-  limits: { dumpChars: 720, intentChars: 160 },
+  limits: {},
   presets: [],
 };
+
+function words(s) {
+  const t = String(s || "").trim();
+  return t ? t.split(/\s+/).length : 0;
+}
 
 function knobLabel(id, n) {
   const v = Number(n);
@@ -23,20 +31,33 @@ function knobLabel(id, n) {
 }
 
 function paintCounts() {
+  const dumpMax = state.limits.dumpChars || 8000;
   const d = state.dump.length;
-  const max = state.limits.dumpChars;
-  $("dumpCount").textContent = `${d} / ${max}`;
-  $("intentCount").textContent = `${state.intent.length} / ${state.limits.intentChars}`;
-  $("dump").classList.toggle("over", d > max * 0.9);
+  $("dumpCount").textContent = `${d.toLocaleString()} chars · ${words(state.dump).toLocaleString()} words · cap ${dumpMax.toLocaleString()}`;
+  $("intentCount").textContent = `${state.intent.length} / ${state.limits.intentChars ?? 160}`;
+  $("nameCount").textContent = `${state.name.length} / ${state.limits.nameChars ?? 40}`;
+  $("dump").classList.toggle("over", d > dumpMax * 0.95);
+
   const reject = $("reject");
-  if (d > max) {
+  if (d > dumpMax) {
     reject.hidden = false;
-    reject.textContent = `Too much. Cap is ${max} characters. Distill a shorter dump — do not paste a biography.`;
-  } else if (d > max * 0.85) {
+    reject.textContent = `Over the ${dumpMax.toLocaleString()}-char cap — trim it or let Distill keep only the durable policy.`;
+  } else if (d > (state.limits.dumpWarn ?? dumpMax * 0.8)) {
     reject.hidden = false;
-    reject.textContent = "Getting long. Distill will keep only durable policy.";
+    reject.textContent = "Getting long. Distill will keep only the durable policy and drop the rest.";
   } else {
     reject.hidden = true;
+  }
+
+  const c = state.compiled;
+  const cap = state.limits.contractChars || 1400;
+  if (c) {
+    const pct = Math.min(100, Math.round((c.chars / cap) * 100));
+    $("meterFill").style.width = pct + "%";
+    $("meter").textContent = `${c.estTokens} tok · ${c.chars}/${cap} ch`;
+  } else {
+    $("meterFill").style.width = "0%";
+    $("meter").textContent = "— tok";
   }
 }
 
@@ -56,12 +77,11 @@ function paint() {
   $("dump").value = state.dump;
   $("base").value = state.lemonade.base;
   $("model").value = state.lemonade.model;
-  $("hook").textContent = `${location.origin}/v1/chat/completions`;
+  $("hook").textContent = `${location.origin}${BASE}/v1/chat/completions`;
   paintKnobs();
   paintCounts();
   const c = state.compiled;
   $("prompt").textContent = c?.prompt || "";
-  $("meter").textContent = c ? `${c.estTokens} tok · ${c.chars} ch` : "—";
   const keep = state.keep || [];
   $("keepBox").hidden = !keep.length;
   $("keepList").innerHTML = keep.map((k) => `<li>${escapeHtml(k)}</li>`).join("");
@@ -105,7 +125,7 @@ function payload() {
 }
 
 async function api(method, path, body) {
-  const res = await fetch(path, {
+  const res = await fetch(BASE + path, {
     method,
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
@@ -122,6 +142,17 @@ function applyServer(data) {
   paint();
 }
 
+function flash(btn, okText) {
+  const orig = btn.dataset.orig || btn.textContent;
+  btn.dataset.orig = orig;
+  btn.textContent = okText;
+  btn.classList.add("flash");
+  setTimeout(() => {
+    btn.textContent = orig;
+    btn.classList.remove("flash");
+  }, 1100);
+}
+
 function renderPresets() {
   const box = $("examples");
   box.innerHTML = "";
@@ -136,6 +167,8 @@ function renderPresets() {
       state.dump = p.example;
       state.knobs = { ...p.knobs };
       paint();
+      for (const c of box.children) c.classList.remove("on");
+      b.classList.add("on");
     });
     box.appendChild(b);
   }
@@ -155,45 +188,65 @@ async function health() {
 }
 
 $("compileBtn").addEventListener("click", async () => {
+  const btn = $("compileBtn");
+  btn.disabled = true;
   try {
     applyServer(await api("POST", "/api/compile", payload()));
+    flash(btn, "✓ Compiled");
   } catch (err) {
     $("reject").hidden = false;
     $("reject").textContent = err.message;
+  } finally {
+    btn.disabled = false;
   }
 });
 
 $("distillBtn").addEventListener("click", async () => {
   const btn = $("distillBtn");
   btn.disabled = true;
-  btn.textContent = "Distilling…";
+  btn.textContent = "✦ Distilling…";
   try {
     applyServer(await api("POST", "/api/distill", payload()));
+    flash(btn, "✓ Distilled");
   } catch (err) {
     $("reject").hidden = false;
     $("reject").textContent = err.message;
   } finally {
     btn.disabled = false;
-    btn.textContent = "Distill with Lemonade";
+    btn.textContent = "✦ Distill with Lemonade";
   }
 });
 
 $("copyBtn").addEventListener("click", async () => {
-  await navigator.clipboard.writeText($("prompt").textContent);
-  $("copyBtn").textContent = "Copied";
-  setTimeout(() => ($("copyBtn").textContent = "Copy prompt"), 1200);
+  try {
+    await navigator.clipboard.writeText($("prompt").textContent);
+    flash($("copyBtn"), "✓ Copied");
+  } catch {
+    $("copyBtn").textContent = "Ctrl+C failed — select manually";
+  }
 });
 
 $("copyCurl").addEventListener("click", async () => {
-  const curl = `curl ${location.origin}/v1/chat/completions -H "Content-Type: application/json" -d "{\\"model\\":\\"${state.lemonade.model}\\",\\"messages\\":[{\\"role\\":\\"user\\",\\"content\\":\\"ping\\"}]}"`;
-  await navigator.clipboard.writeText(curl);
-  $("copyCurl").textContent = "Copied";
-  setTimeout(() => ($("copyCurl").textContent = "Copy curl"), 1200);
+  const url = `${location.origin}${BASE}/v1/chat/completions`;
+  const curl = `curl ${url} -H "Content-Type: application/json" -d '{"model":"${state.lemonade.model}","messages":[{"role":"user","content":"ping"}]}'`;
+  try {
+    await navigator.clipboard.writeText(curl);
+    flash($("copyCurl"), "✓ Copied");
+  } catch {
+    $("copyCurl").textContent = "clipboard blocked";
+  }
 });
 
 for (const id of ["name", "intent", "dump", "base", "model", "grounding", "scaffolding", "wit", "jokes"]) {
   $(id).addEventListener("input", collect);
 }
+
+// Auto-grow the dump box so long paragraphs never feel cramped.
+const dumpEl = $("dump");
+dumpEl.addEventListener("input", () => {
+  dumpEl.style.height = "auto";
+  dumpEl.style.height = Math.min(560, Math.max(230, dumpEl.scrollHeight)) + "px";
+});
 
 (async function boot() {
   applyServer(await api("GET", "/api/state"));

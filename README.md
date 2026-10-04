@@ -12,7 +12,7 @@ Large language models burn tokens guessing tone: scientific vs. cheerleader, whe
 ## 1. Why
 
 - **Tone policy, not personality:** the contract is session-scoped; model weights are never touched.
-- **Cap-fit:** dump ≤ 720 chars, intent ≤ 160 chars, contract ≤ 1,400 chars, proxy payload ≤ 16,000 chars.
+- **Cap-fit:** dump ≤ 8,000 chars, intent ≤ 160 chars, contract ≤ 1,400 chars, proxy payload ≤ 16,000 chars.
 - **Drop the noise:** distill compresses "I am an idiot ha ha" into "Self-loathing jokes are camouflage. Do not take them literally."
 - **Cheap and offline-safe:** the panel works without an upstream; if Lemonade is unreachable, `/api/distill` falls back to a local keyword-based cleaner.
 
@@ -90,7 +90,7 @@ L-con persists state to `data/state.json`. You can configure via the panel (reco
 ## 5. Use the panel
 
 1. Fill **Today** (one sentence, ≤ 160 chars).
-2. Fill **Dump** (durable facts, ≤ 720 chars).
+2. Fill **Dump** — type freely, a few sentences or a full paragraph (≤ 8,000 chars). Distill trims it to durable policy.
 3. Drag the four sliders — they populate the contract immediately.
 4. Click **Compile locally** for a deterministic contract render (no upstream).
 6. Click **Distill with Lemonade** to let the upstream model propose cleaner keep/drop bullets, then re-compile.
@@ -179,7 +179,7 @@ All four return the same shape (`{today, keep[], drop[], source}`) so the panel 
 |---|---|---|
 | `name` | 40 | `LIMITS.nameChars` |
 | `intent` (Today) | 160 | `LIMITS.intentChars` |
-| `dump` | 720 | `LIMITS.dumpChars` |
+| `dump` | 8000 | `LIMITS.dumpChars` |
 | `keep` bullets | 6 | `LIMITS.keepBullets` |
 | per-bullet | 140 | `LIMITS.keepBulletChars` |
 | contract prompt | 1400 | `LIMITS.contractChars` |

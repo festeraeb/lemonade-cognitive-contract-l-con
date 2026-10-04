@@ -7,13 +7,19 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Syne:wght@600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;600;700&family=JetBrains+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,500;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="styles.css?v=lcon2" />
   </head>
   <body>
-    <div class="grain"></div>
+    <div class="aurora" aria-hidden="true">
+      <div class="aurora-a"></div>
+      <div class="aurora-b"></div>
+      <div class="aurora-c"></div>
+    </div>
+    <div class="grain" aria-hidden="true"></div>
+
     <header class="top">
       <div class="brand">
         <div class="mark">L</div>
@@ -22,7 +28,7 @@
           <p class="tag">Lemonade cognitive contract — policy, not weights</p>
         </div>
       </div>
-      <div class="status" id="status">
+      <div class="status">
         <span class="dot" id="dot"></span>
         <span id="statusText">checking lemonade</span>
       </div>
@@ -31,78 +37,83 @@
     <main class="grid">
       <section class="panel">
         <p class="lede">
-          Tell the model how to spend tokens <em>today</em>. Keep it short. A first-pass
-          Lemonade model will scrub a messy dump into a contract. Point any OpenAI-compatible
-          client at this panel’s <code>/v1</code> hook and the contract is prepended.
+          Tell the model how to spend tokens <em>today</em>. Type a messy paragraph —
+          Distill boils it down to a short contract. Point any OpenAI-compatible
+          client at this page’s <code>/v1</code> hook and the contract is prepended.
         </p>
 
         <div class="row2">
           <label>
-            Operator
-            <input id="name" maxlength="40" autocomplete="off" />
+            <span class="lab">Your name</span>
+            <span class="hint" id="nameCount"></span>
+            <input id="name" maxlength="40" autocomplete="off" placeholder="Name here — e.g. thom" />
           </label>
           <label>
-            Today <span class="hint" id="intentCount"></span>
-            <input id="intent" maxlength="160" placeholder="One sentence. What this session is for." />
+            <span class="lab">Today’s goal</span>
+            <span class="hint" id="intentCount"></span>
+            <input id="intent" maxlength="160" autocomplete="off"
+              placeholder="One sentence — what is this session for?" />
           </label>
         </div>
 
         <div class="examples" id="examples"></div>
 
         <label class="block">
-          Dump <span class="hint">facts only — not a memoir</span>
+          <span class="lab">Brain dump — type freely</span>
           <span class="hint" id="dumpCount"></span>
           <textarea
             id="dump"
-            maxlength="720"
-            rows="5"
-            placeholder="ADHD, joke camouflage, today’s job. If it needs a paragraph, Distill will cut it."
+            rows="10"
+            placeholder="Type as much as you need — a few sentences or a whole paragraph. Stream of consciousness is fine.\n\nExample: Rough night, brain all over. ADHD mode. If I call myself an idiot that is nerves, not a diagnosis. Dry wit is the register. Today I just want one fleet fix shipped.\n\nDistill boils this down to the durable policy; Compile renders the contract."
           ></textarea>
         </label>
         <p class="reject" id="reject" hidden></p>
 
         <div class="knobs">
           <label>
-            <span>Grounding <b id="gVal"></b></span>
+            <span><span class="lab">Grounding</span> <b id="gVal"></b></span>
             <input type="range" id="grounding" min="0" max="100" />
-            <small>heuristic → scientific</small>
+            <small>heuristic ←→ scientific</small>
           </label>
           <label>
-            <span>Load <b id="sVal"></b></span>
+            <span><span class="lab">Load</span> <b id="sVal"></b></span>
             <input type="range" id="scaffolding" min="0" max="100" />
-            <small>leave me alone → cheerleader</small>
+            <small>leave me alone ←→ cheerleader</small>
           </label>
           <label>
-            <span>Wit <b id="wVal"></b></span>
+            <span><span class="lab">Wit</span> <b id="wVal"></b></span>
             <input type="range" id="wit" min="0" max="100" />
-            <small>earnest → dry</small>
+            <small>earnest ←→ dry</small>
           </label>
           <label>
-            <span>Jokes <b id="jVal"></b></span>
+            <span><span class="lab">Jokes</span> <b id="jVal"></b></span>
             <input type="range" id="jokes" min="0" max="100" />
-            <small>check in → never literal</small>
+            <small>check in ←→ never literal</small>
           </label>
         </div>
 
         <div class="actions">
-          <button type="button" class="ghost" id="compileBtn">Compile locally</button>
-          <button type="button" class="solid" id="distillBtn">Distill with Lemonade</button>
+          <button type="button" class="solid" id="compileBtn">⚡ Compile locally</button>
+          <button type="button" class="ghost" id="distillBtn">✦ Distill with Lemonade</button>
         </div>
       </section>
 
       <section class="panel contract">
         <div class="contract-head">
           <h2>Compiled contract</h2>
-          <span class="meter" id="meter">0 tok</span>
+          <div class="meter-wrap">
+            <div class="meter-bar"><i id="meterFill"></i></div>
+            <span class="meter" id="meter">— tok</span>
+          </div>
         </div>
-        <pre id="prompt"></pre>
+        <pre id="prompt" class="contract-pre"></pre>
         <div class="keep-box" id="keepBox" hidden>
           <h3>Cleaned keep</h3>
           <ul id="keepList"></ul>
         </div>
         <div class="actions">
-          <button type="button" class="ghost" id="copyBtn">Copy prompt</button>
-          <button type="button" class="ghost" id="copyCurl">Copy curl</button>
+          <button type="button" class="ghost" id="copyBtn">⧉ Copy prompt</button>
+          <button type="button" class="ghost" id="copyCurl">⧉ Copy curl</button>
         </div>
         <p class="fine" id="distillNote"></p>
       </section>
@@ -111,12 +122,12 @@
         <h2>Lemonade hook</h2>
         <div class="row2">
           <label>
-            Upstream base
-            <input id="base" spellcheck="false" />
+            <span class="lab">Upstream base URL</span>
+            <input id="base" spellcheck="false" placeholder="http://127.0.0.1:13321/v1" />
           </label>
           <label>
-            Distill model
-            <input id="model" spellcheck="false" />
+            <span class="lab">Distill model name</span>
+            <input id="model" spellcheck="false" placeholder="nauti-recovery" />
           </label>
         </div>
         <p class="fine">
@@ -125,6 +136,6 @@
         </p>
       </section>
     </main>
-    <script src="/app.js"></script>
+    <script src="app.js?v=lcon2"></script>
   </body>
 </html>
