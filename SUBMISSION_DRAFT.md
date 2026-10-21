@@ -63,11 +63,11 @@ Command: `LEMONADE_BASE=http://127.0.0.1:18305/api/v1 MODEL=Qwen3-14B-GGUF scrip
 Each number below is followed by the command that produced or re-checks it.
 
 - Contract cost: +173 prompt tokens on Qwen3-14B's tokenizer (202/204/196 with contract vs 29/31/23 without). Command: `scripts/measure.sh` (above), read from `usage.prompt_tokens` in `docs/measurements/2026-10-21/p*_*.json` and tabulated by `node scripts/summarize.mjs docs/measurements/2026-10-21`. The README's earlier "about 300 tokens" claim was wrong and is replaced by this figure.
-- Latency (s), baseline vs contract: P1 29.2 vs 61.1 (unexplained, not repeated in the stored data), P2 31.5 vs 31.9, P3 30.8 vs 30.6. Command: `cat docs/measurements/2026-10-21/p*_*.latency_s` (curl `time_total`).
+- Latency (s), baseline vs contract: P1 29.2 vs 61.1, P2 31.5 vs 31.9, P3 30.8 vs 30.6. The 61.1 s P1 contract run did not reproduce when an independent reviewer repeated P1 the same day (25.7 s baseline vs 31.4 s with the contract), so it is best read as noise, not as a cost of the contract; the stored data was not changed. Command: `cat docs/measurements/2026-10-21/p*_*.latency_s` (curl `time_total`).
 - Generation speed: 2.5 tok/s baseline, 2.4 tok/s with contract (`table.md`, from `scripts/summarize.mjs`). All 6 replies hit the 64-token cap (`finish=length`), so completion length says nothing.
 - Reply style (3 prompts): contract replies had no markdown headings or emoji; all 3 baseline replies used `###` headings or `---` rules and 2 of 3 used emoji. Check: read the replies in `docs/measurements/2026-10-21/table.md`.
 - Compiled contract length per preset, `node docs/measurements/contract_chars.mjs`: 702 / 780 / 662 / 698 characters, under the 1400 cap (re-run today, same output).
-- Tests: `cd L-con && npm test` gives 28 pass, 0 fail on Node v22.23.3 (compile/limits, distill against a stub HTTP server, proxy spawned in front of a stub upstream).
+- Tests: `cd L-con && npm test` gives 29 pass, 0 fail on Node v22.23.3 (compile/limits, distill against a stub HTTP server, proxy spawned in front of a stub upstream).
 
 These measurements are anecdotal: 3 prompts, 1 run each, a CPU-only 14B model (Qwen3-14B-GGUF, about 2.5 tok/s), replies cut at 64 tokens. They show the contract changes reply style and costs prompt tokens; they do not show better answers. Quality benefit remains a HYPOTHESIS.
 
@@ -89,12 +89,12 @@ Binding is loopback only. The measurement run used the proxy against live Lemona
 
 ## 7. Limitations (known, honest)
 
-- Automated tests: 28 (`npm test`), stub-based; nothing automated runs against live Lemonade.
+- Automated tests: 29 (`npm test`), stub-based; nothing automated runs against live Lemonade.
 - Over-cap contract truncation drops the final "task wins" precedence sentence (documented by a test, not fixed).
 - No quality evaluation; the benefit is a HYPOTHESIS.
 - The proxy does not support streaming specially: it reads the whole upstream body with `upstream.text()` before replying, so `stream: true` is not streamed incrementally (from reading `server.js`, not tested).
 - No upstream auth: it sends no `Authorization` header, so it will not work against a Lemonade started with `LEMONADE_API_KEY`.
-- Over-cap proxy payloads return 400 `too_much` (README corrected from 413; verified by a test).
+- Over-cap `PUT /api/state`, `/api/compile` and `/api/distill` fields return 413 `too_much`; over-cap proxy payloads return 400 `too_much` (README corrected from 413; both verified by tests).
 - The proxy has no auth of its own and does not forward the client's `Authorization` header upstream (test-asserted).
 - Measurement is 3 prompts, 1 run each, CPU-only at about 2.5 tok/s; no recorded demo exists yet.
 - The README default upstream (`http://127.0.0.1:13321/v1`, model `nauti-recovery`) is the author's own setup, not a Lemonade default.
@@ -131,7 +131,7 @@ Show, in this order:
 3. The contract: move the sliders, then `curl -s http://127.0.0.1:7740/api/state | jq .compiled.prompt` to show the compiled text (about 700 characters).
 4. Same prompt twice: send one prompt directly to Lemonade, then through `POST http://127.0.0.1:7740/v1/chat/completions` (README curl, `max_tokens` 64) and show the reply style difference.
 5. Measurement: run `LEMONADE_BASE={base} MODEL={model} scripts/measure.sh` (about 6 requests, several minutes on CPU; edit down) and end on the printed table, stating that it is 3 prompts, 1 run each.
-6. Tests: `npm test` showing 28 pass.
+6. Tests: `npm test` showing 29 pass.
 7. Close with the limitations from section 7 (no quality evaluation, streaming not tested, no upstream auth).
 
 Do not claim anything not shown on screen. Add the link to the form field above.
