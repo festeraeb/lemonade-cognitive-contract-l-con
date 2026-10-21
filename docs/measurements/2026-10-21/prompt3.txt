@@ -1,0 +1,1 @@
+Why can a thermal throttle show up as latency spikes?
