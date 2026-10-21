@@ -8,7 +8,7 @@ import { distill, lemonadeHealth } from "./lib/distill.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, "public");
-const DATA_DIR = path.join(__dirname, "data");
+const DATA_DIR = process.env.LCON_DATA_DIR || path.join(__dirname, "data");
 const STATE_PATH = path.join(DATA_DIR, "state.json");
 const PORT = Number(process.env.LCON_PORT || 7740);
 
@@ -234,6 +234,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, "127.0.0.1", () => {
-  console.log(`L-con panel  http://127.0.0.1:${PORT}`);
-  console.log(`OpenAI hook  http://127.0.0.1:${PORT}/v1  (prepends the compiled contract)`);
+  const bound = server.address().port;
+  console.log(`L-con panel  http://127.0.0.1:${bound}`);
+  console.log(`OpenAI hook  http://127.0.0.1:${bound}/v1  (prepends the compiled contract)`);
 });
