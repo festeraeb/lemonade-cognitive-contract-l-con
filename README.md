@@ -3,7 +3,7 @@
 > **Repo:** https://github.com/festeraeb/lemonade-cognitive-contract-l-con
 > **MIT licensed.** No model weights are bundled or modified.
 
-A small, zero-dependency **OpenAI-compatible proxy + panel** that compiles a short *cognitive contract* (~300 tokens) from a messy brain-dump and prepends it to every chat request before it reaches Lemonade (or any OpenAI-compatible backend).
+A small, zero-dependency **OpenAI-compatible proxy + panel** that compiles a short *cognitive contract* (about 170 tokens on Qwen3-14B's tokenizer for the default preset, measured below) from a messy brain-dump and prepends it to every chat request before it reaches Lemonade (or any OpenAI-compatible backend).
 
 Large language models burn tokens guessing tone: scientific vs. cheerleader, whether a self-loathing joke is literal, how much ADHD scaffolding to use. **L-con** turns those into explicit session instructions so the model can spend its tokens on the actual task.
 
@@ -18,9 +18,59 @@ Large language models burn tokens guessing tone: scientific vs. cheerleader, whe
 
 ---
 
+## Lemonade endpoints used
+
+L-con calls only two Lemonade (OpenAI-compatible) endpoints, relative to the configured base (for Lemonade, `http://HOST:PORT/api/v1`):
+
+| Endpoint | Used by |
+|---|---|
+| `POST {base}/chat/completions` | proxy (`server.js`) and the distill call (`lib/distill.js`) |
+| `GET {base}/models` | `/v1/models` passthrough and `/api/health` |
+
+It does not use Lemonade's health, stats, load or unload endpoints, and it sends no `Authorization` header (so it will not work against a Lemonade started with an API key).
+
+## Tests
+
+```bash
+npm test      # node --test test/*.test.js ; no dependencies
+```
+
+28 tests (compile/limits, distill against a stub HTTP server, the proxy as a spawned server in front of a stub upstream). Last run: 28 pass, 0 fail, Node v22.23.3. `LCON_DATA_DIR` overrides where `state.json` is stored (the tests use a temp dir).
+
+## Measured: with and without the contract (Lemonade 11.9.0, Qwen3-14B Q4_0, CPU)
+
+Command (needs a reachable Lemonade; this run used an SSH tunnel to it):
+
+```bash
+LEMONADE_BASE=http://127.0.0.1:18305/api/v1 MODEL=Qwen3-14B-GGUF scripts/measure.sh
+```
+
+It sends 3 fixed prompts, each once direct to Lemonade (baseline) and once through L-con (contract prepended; "Thom default" knobs 86/42/72/70, 698 characters, see `docs/measurements/2026-10-21/contract.txt`). Settings: `max_tokens` 64, `temperature` 0, `enable_thinking` false, sequential. Raw responses are in `docs/measurements/2026-10-21/`.
+
+| # | mode | prompt tok | completion tok | latency s | gen tok/s | reply (cut at 64 tokens) |
+|---|---|---|---|---|---|---|
+| 1 | baseline | 29 | 64 | 29.2 | 2.5 | Getting distracted while debugging a flaky test is a common challenge, ... Here's a structured approach ... ### **1. Reassess the Situation** ... |
+| 1 | contract | 202 | 64 | 61.1 | 2.4 | Next action: Use the "Pomodoro Technique" - set a 25-minute timer ... Would you like to start a |
+| 2 | baseline | 31 | 64 | 31.5 | 2.5 | Ah, the eternal struggle of the broken build! Don't worry ... ### 1. Check the Last Commit ... |
+| 2 | contract | 204 | 64 | 31.9 | 2.4 | First, check the most recent commit message ... If that's not it, run the test suite. ... |
+| 3 | baseline | 23 | 64 | 30.8 | 2.5 | A **thermal throttle** can show up as **latency spikes** ... ### What is Thermal Throttling? ... |
+| 3 | contract | 196 | 64 | 30.6 | 2.4 | A thermal throttle can show up as latency spikes because ... |
+
+What the numbers show: the contract added 173 prompt tokens in all three prompts. Every reply hit the 64-token cap, so completion length says nothing. Replies with the contract were visibly plainer (no markdown headings, rules or emoji in these three; all three baseline replies used `###` headings and two of them used emoji) and prompt 1 became a single next action. Full replies are in `table.md` and the raw JSON.
+
+## Limitations
+
+- This is anecdotal: 3 prompts, 1 run each, one model, `temperature` 0. It is not a benchmark and shows no quality improvement, only that the contract changes the reply style.
+- CPU inference at about 2.5 generated tokens/s on a 14B model; replies were cut at 64 tokens, so full-answer behaviour is unmeasured.
+- Latency is not a clean comparison. Prompt 1 with the contract took 61.1 s against 29.2 s for the baseline while generation speed was the same (2.4 vs 2.5 tok/s); I did not investigate why, and did not repeat it. The other two prompts differ by under 1 s.
+- Prompt-token counts include the model's chat template, so the contract's own cost is the difference (173), not the total.
+- If a contract exceeds 1400 characters it is cut off at the end, which removes the final "task wins" precedence sentence (covered by a test).
+- Proxy does not stream (it buffers the whole upstream body); no upstream auth; the default upstream in code is the author's own setup, not a Lemonade default.
+- The demo run used one Lemonade server; other models, GPUs/NPU backends were not tried.
+
 ## 2. Prerequisites
 
-- **Node.js 22+** (uses built-in `fetch`/`AbortSignal.timeout`; no `npm install` required).
+- **Node.js 22+** (tested only on v22.23.3; `package.json` says >=18, which was not tested; uses built-in `fetch`/`AbortSignal.timeout`; no `npm install` required).
 - A reachable **OpenAI-compatible base URL** for the *distill* step (any Lemonade, vLLM, llama.cpp, OpenRouter, etc.). The **proxy itself** can talk to *any* OpenAI-compatible target.
 
 ---
@@ -185,7 +235,7 @@ All four return the same shape (`{today, keep[], drop[], source}`) so the panel 
 | contract prompt | 1400 | `LIMITS.contractChars` |
 | proxy payload | 16000 | `LIMITS.messagesChars` |
 
-Caps are the *whole point* of the tool — they force the contract to stay cheap. Anything that violates a cap returns `413 too_much` from the API.
+Caps are the *whole point* of the tool — they force the contract to stay cheap. Over-cap `PUT /api/state` and `/api/compile` fields return `413 too_much`; an over-cap proxy payload returns `400 too_much` (verified by tests).
 
 ---
 
