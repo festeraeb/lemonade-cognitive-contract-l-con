@@ -112,6 +112,15 @@ test("api: PUT /api/state rejects over-cap intent with 413 and state changes alt
   assert.match(seen[0].body.messages[0].content, /Prefer practical heuristics/);
 });
 
+test("api: POST /api/compile and /api/distill reject an over-cap dump with 413 too_much", async () => {
+  const big = JSON.stringify({ dump: "x".repeat(20000) });
+  for (const route of ["compile", "distill"]) {
+    const r = await fetch(`${lcon}/api/${route}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: big });
+    assert.equal(r.status, 413, route);
+    assert.equal((await r.json()).code, "too_much", route);
+  }
+});
+
 test("proxy: unreachable upstream -> 500 JSON error with cause (fails loudly, no fake reply)", async () => {
   await fetch(`${lcon}/api/state`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lemonade: { base: "http://127.0.0.1:1/v1" } }) });
   const r = await post({ messages: [{ role: "user", content: "a" }] });

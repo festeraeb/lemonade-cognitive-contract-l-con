@@ -235,7 +235,7 @@ All four return the same shape (`{today, keep[], drop[], source}`) so the panel 
 | contract prompt | 1400 | `LIMITS.contractChars` |
 | proxy payload | 16000 | `LIMITS.messagesChars` |
 
-Caps are the *whole point* of the tool — they force the contract to stay cheap. Over-cap `PUT /api/state` and `/api/compile` fields return `413 too_much`; an over-cap proxy payload returns `400 too_much` (verified by tests).
+Caps are the *whole point* of the tool — they force the contract to stay cheap. Over-cap `PUT /api/state`, `/api/compile` and `/api/distill` fields return `413 too_much`; an over-cap proxy payload returns `400 too_much` (all verified by tests).
 
 ---
 
