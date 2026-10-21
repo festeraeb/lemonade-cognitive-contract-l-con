@@ -35,7 +35,7 @@ chat request. Model weights are never touched.
 Small local models spend tokens guessing tone. A short explicit session policy, applied
 at the proxy, lets any OpenAI-compatible client benefit without client changes, and it
 runs fully local on a Lemonade server. HYPOTHESIS: this improves small-model response
-quality. No evaluation of that has been run; see section 5.
+quality. No quality evaluation has been run; see section 5 for what was measured.
 
 ## 4. How Lemonade is used (endpoints)
 
@@ -56,24 +56,18 @@ model Qwen3-14B-GGUF. That check was a Lemonade check, not a test of L-con.
 
 ## 5. Measured results
 
-The implementation report with benchmark numbers was not available (null). No L-con
-end-to-end test against Lemonade has been run for this draft. The only measurement is local and offline:
+All numbers below come from commands run on 2026-10-21 against live Lemonade 11.9.0 (cesarops3, Qwen3-14B-GGUF on CPU, ctx 4096, llamacpp cpu) through a temporary SSH tunnel.
 
-Command (from repo root): `node docs/measurements/contract_chars.mjs`
-Output (`docs/measurements/contract_chars.out`), compiled contract length in characters, name "x", no keep/drop bullets:
+Command: `LEMONADE_BASE=http://127.0.0.1:18305/api/v1 MODEL=Qwen3-14B-GGUF scripts/measure.sh` (3 fixed prompts, each once direct and once through L-con; `max_tokens` 64, `temperature` 0, `enable_thinking` false). Raw JSON and `table.md` are in `docs/measurements/2026-10-21/`.
 
-```
-Science day	702
-ADHD burnout	780
-Dry wit / not literal	662
-Thom default	698
-```
+- Contract cost: +173 prompt tokens on Qwen3-14B's tokenizer (202/204/196 with contract vs 29/31/23 without). The README's earlier "about 300 tokens" claim was wrong and is replaced by this figure.
+- Latency (s), baseline vs contract: P1 29.2 vs 61.1 (unexplained, not repeated), P2 31.5 vs 31.9, P3 30.8 vs 30.6.
+- Generation speed: 2.5 tok/s baseline, 2.4 tok/s with contract. All 6 replies hit the 64-token cap (`finish=length`), so completion length says nothing.
+- Reply style (3 prompts): contract replies had no markdown headings or emoji; all 3 baseline replies used `###` headings and 2 of 3 used emoji.
+- Compiled contract length per preset, `node docs/measurements/contract_chars.mjs`: 702 / 780 / 662 / 698 characters, under the 1400 cap.
+- Tests: `npm test` gives 28 pass, 0 fail on Node v22.23.3 (compile/limits, distill against a stub HTTP server, proxy spawned in front of a stub upstream).
 
-All four are under the 1400-char contract cap in `lib/limits.js`. The README's "about 300
-tokens" is NOT verified: these are characters, no tokenizer was run.
-
-Not measured: latency overhead of the proxy, distill success rate per `source`, any quality effect on model output.
-[[FILL: add a measured run against Lemonade, with command and output, before submitting]]
+Not measured: any quality effect (3 prompts, 1 run each, anecdotal; benefit remains a HYPOTHESIS), the P1 latency outlier cause, streaming, upstream auth, and `/api/distill` against live Lemonade.
 
 ## 6. How to run
 
@@ -87,15 +81,18 @@ curl -s -X POST http://127.0.0.1:7740/v1/chat/completions \
   -d '{"model":"<model name from GET /v1/models>","messages":[{"role":"user","content":"hello"}],"max_tokens":64}'
 ```
 
-Binding is loopback only. I did not run this exact sequence for the draft. `package.json` says node >=18 while the README says 22+; unresolved.
+Binding is loopback only. The measurement run used the proxy against live Lemonade; this exact curl sequence was not run verbatim. Tested only on Node v22.23.3; `package.json` says `>=18`, which was not tested, and the README says 22+ accordingly.
 
 ## 7. Limitations (known, honest)
 
-- No automated tests in the repo (`git ls-files` shows none).
+- Automated tests: 28 (`npm test`), stub-based; nothing automated runs against live Lemonade.
+- Over-cap contract truncation drops the final "task wins" precedence sentence (documented by a test, not fixed).
 - No quality evaluation; the benefit is a HYPOTHESIS.
 - The proxy does not support streaming specially: it reads the whole upstream body with `upstream.text()` before replying, so `stream: true` is not streamed incrementally (from reading `server.js`, not tested).
 - No upstream auth: it sends no `Authorization` header, so it will not work against a Lemonade started with `LEMONADE_API_KEY`.
-- The README says over-cap requests return 413; the proxy code returns 400 `too_much`. Docs and code disagree.
+- Over-cap proxy payloads return 400 `too_much` (README corrected from 413; verified by a test).
+- The proxy has no auth of its own and does not forward the client's `Authorization` header upstream (test-asserted).
+- Measurement is 3 prompts, 1 run each, CPU-only at about 2.5 tok/s; no recorded demo exists yet.
 - The README default upstream (`http://127.0.0.1:13321/v1`, model `nauti-recovery`) is the author's own setup, not a Lemonade default.
 - Lemonade-specific features (stats, load/unload, health) are not used, so the integration is a thin OpenAI-compatible one.
 - The Nauti-Monitor and Ori fixes are on unmerged branches and are not part of this submission or claimed as merged.

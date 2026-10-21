@@ -92,7 +92,7 @@ To change the port or listen address:
 LCON_PORT=8080 node server.js
 ```
 
-The server binds `127.0.0.1` by default — only loopback. If you want LAN or internet access, terminate at a reverse proxy (nginx, caddy, traefik, …) — **do not** expose this directly with the public default upstream, since the proxy will happily forward `Authorization` headers to whatever base you configured.
+The server binds `127.0.0.1` by default — only loopback. If you want LAN or internet access, terminate at a reverse proxy (nginx, caddy, traefik, …) — **do not** expose this directly: the proxy has no authentication of its own, so anyone who can reach it can send requests to your configured upstream. It does not forward the client's `Authorization` header upstream (it sends only `Content-Type`; asserted by `test/proxy.test.js`).
 
 ---
 
