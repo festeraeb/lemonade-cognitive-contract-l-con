@@ -48,11 +48,12 @@ test("compile: name, intent, keep and drop appear in output; chars matches lengt
 });
 
 test("compile: keep capped at keepBullets and each bullet clipped", () => {
-  const keep = Array.from({ length: 10 }, (_, i) => `k${i}-` + "z".repeat(300));
-  const c = compile({ name: "t", intent: "i", knobs, keep });
-  const lines = c.prompt.split("Keep (cleaned):\n")[1].split("\n");
-  assert.equal(lines.length, LIMITS.keepBullets);
-  assert.ok(lines.every((l) => l.length <= 2 + LIMITS.keepBulletChars));
+  const bullets = (c) => c.prompt.split("Keep (cleaned):\n")[1].split("\nIf this contract")[0].split("\n");
+  const short = Array.from({ length: 10 }, (_, i) => `k${i}`);
+  assert.equal(bullets(compile({ name: "t", intent: "i", knobs, keep: short })).length, LIMITS.keepBullets);
+  // Long bullets are clipped; the precedence sentence is kept, so the body may lose its tail first.
+  const long = Array.from({ length: 10 }, (_, i) => `k${i}-` + "z".repeat(300));
+  assert.ok(bullets(compile({ name: "t", intent: "i", knobs, keep: long })).every((l) => l.length <= 2 + LIMITS.keepBulletChars));
 });
 
 test("compile: drop capped at 4 and each clipped to 80", () => {
@@ -64,11 +65,20 @@ test("compile: drop capped at 4 and each clipped to 80", () => {
   assert.ok(c2.prompt.includes("- " + "e".repeat(80) + "\n"));
 });
 
-test("compile: over-cap contract is cut off at the tail (the precedence sentence is lost) - documents current behaviour", () => {
+test("compile: an over-cap contract cuts the body and keeps the precedence sentence last", () => {
   const keep = Array.from({ length: 6 }, () => "y".repeat(140));
-  const c = compile({ name: "n".repeat(100), intent: "q".repeat(500), knobs, keep, drop: ["d".repeat(200), "e", "f", "g"] });
+  const c = compile({ name: "n".repeat(100), intent: "q".repeat(500), knobs, keep, drop: ["d".repeat(200), "e", "f", "g"], modelSteer: "z".repeat(400) });
   assert.equal(c.chars <= LIMITS.contractChars, true);
-  assert.doesNotMatch(c.prompt, /the task wins/);
+  assert.match(c.prompt, /the task wins\. If it conflicts about tone or load, this contract wins\.$/);
+});
+
+test("compile: a model steer is added as one clipped 'Model notes' line before the precedence sentence", () => {
+  const c = compile({ name: "t", intent: "i", knobs, modelSteer: "Before agreeing, give the strongest objection." });
+  const lines = c.prompt.split("\n");
+  assert.equal(lines[lines.length - 2], "Model notes: Before agreeing, give the strongest objection.");
+  const long = compile({ name: "t", intent: "i", knobs, modelSteer: "w".repeat(500) });
+  assert.ok(long.prompt.includes("Model notes: " + "w".repeat(LIMITS.modelSteerChars) + "\n"));
+  assert.doesNotMatch(compile({ name: "t", intent: "i", knobs }).prompt, /Model notes/);
 });
 
 test("compile: output never exceeds contractChars", () => {

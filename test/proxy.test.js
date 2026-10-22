@@ -129,3 +129,37 @@ test("proxy: unreachable upstream -> 500 JSON error with cause (fails loudly, no
   assert.ok(j.error);
   assert.equal(j.choices, undefined);
 });
+
+test("proxy: model profiles add a per-model steer, report it, and the scoreboard steers by outcome", async () => {
+  const profiles = [
+    { id: "qwen3-4b", match: ["qwen3-4b*"], steers: [{ id: "objection-first", text: "Before agreeing, give the strongest objection." }, { id: "evidence-first", text: "Lead with the evidence." }] },
+  ];
+  const put = await fetch(`${lcon}/api/state`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ modelProfiles: profiles, lemonade: { base: `http://127.0.0.1:${upstream.address().port}/api/v1` } }) });
+  assert.equal(put.status, 200);
+
+  seen = [];
+  const r = await post({ model: "Qwen3-4B-Instruct-2507-GGUF", messages: [{ role: "user", content: "plan?" }] });
+  assert.equal(r.status, 200);
+  const steerId = r.headers.get("x-l-con-steer");
+  assert.ok(["objection-first", "evidence-first"].includes(steerId));
+  assert.match(seen[0].body.messages[0].content, /\nModel notes: .+\nIf this contract conflicts/);
+
+  // A model with no matching profile gets no steer and no header.
+  seen = [];
+  const other = await post({ model: "some-other-model", messages: [{ role: "user", content: "x" }] });
+  assert.equal(other.headers.get("x-l-con-steer"), null);
+  assert.doesNotMatch(seen[0].body.messages[0].content, /Model notes/);
+
+  // Scoreboard: objection-first keeps helping, evidence-first keeps hurting -> objection-first is chosen.
+  const rec = (steer, outcome) =>
+    fetch(`${lcon}/api/scoreboard`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "Qwen3-4B-Instruct-2507-GGUF", steerId: steer, outcome }) });
+  for (let i = 0; i < 6; i++) {
+    assert.equal((await rec("objection-first", "helped")).status, 200);
+    assert.equal((await rec("evidence-first", "hurt")).status, 200);
+  }
+  assert.equal((await rec("evidence-first", "maybe")).status, 400);
+  const again = await post({ model: "Qwen3-4B-Instruct-2507-GGUF", messages: [{ role: "user", content: "plan?" }] });
+  assert.equal(again.headers.get("x-l-con-steer"), "objection-first");
+  const board = await (await fetch(`${lcon}/api/scoreboard`)).json();
+  assert.equal(board.models["Qwen3-4B-Instruct-2507-GGUF"]["objection-first"].helped, 6);
+});

@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { compile, defaultState, PRESETS } from "./lib/compile.js";
 import { LIMITS, rejectIfOver } from "./lib/limits.js";
 import { distill, lemonadeHealth } from "./lib/distill.js";
+import { selectProfile } from "./lib/model_side.js";
+import { emptyBoard, pickSteer, record } from "./lib/scoreboard.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, "public");
@@ -97,19 +99,32 @@ function mergeState(body) {
   return next;
 }
 
-function compiledFrom(state) {
+function compiledFrom(state, modelSteer = "") {
   return compile({
     name: state.name,
     intent: state.intent,
     knobs: state.knobs,
     keep: state.keep,
     drop: state.drop,
+    modelSteer,
   });
+}
+
+// Model side of the contract: the counter-steer for the exact model this request goes to, chosen by the
+// local scoreboard (see docs/TWO_SIDED_CONTRACT.md). No profiles configured means no steer.
+function steerFor(state, model) {
+  const profile = selectProfile(model, state.modelProfiles || []);
+  const steers = profile?.steers || [];
+  const id = pickSteer(state.scoreboard || emptyBoard(), model, steers.map((s) => s.id));
+  const steer = steers.find((s) => s.id === id);
+  return steer ? { id: steer.id, text: steer.text } : null;
 }
 
 async function proxyChat(req, res, state) {
   const body = await readBody(req);
-  const compiled = compiledFrom(state);
+  const model = body.model || state.lemonade.model;
+  const steer = steerFor(state, model);
+  const compiled = compiledFrom(state, steer?.text || "");
   const injected = Array.isArray(body.messages) ? body.messages.slice() : [];
   const totalChars = compiled.chars + injected.reduce((s, m) => s + String(m?.content || "").length, 0);
   const maxPayload = Number(process.env.LCON_MAX_PROXY_CHARS) || LIMITS.messagesChars || 16000;
@@ -131,7 +146,7 @@ async function proxyChat(req, res, state) {
   const base = String(state.lemonade.base || "").replace(/\/$/, "");
   const payload = {
     ...body,
-    model: body.model || state.lemonade.model,
+    model,
     messages: injected,
   };
   const upstream = await fetch(`${base}/chat/completions`, {
@@ -144,6 +159,7 @@ async function proxyChat(req, res, state) {
     "Content-Type": upstream.headers.get("content-type") || "application/json",
     "Access-Control-Allow-Origin": "*",
     "X-L-Con-Chars": String(compiled.chars),
+    ...(steer ? { "X-L-Con-Steer": steer.id } : {}),
   });
   res.end(text);
 }
@@ -195,6 +211,23 @@ const server = http.createServer(async (req, res) => {
       next.compiled = compiledFrom(next);
       saveState(next);
       send(res, 200, next);
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/scoreboard") {
+      send(res, 200, loadState().scoreboard || emptyBoard());
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/api/scoreboard") {
+      const b = await readBody(req);
+      const state = loadState();
+      try {
+        state.scoreboard = record(state.scoreboard || emptyBoard(), String(b.model || ""), String(b.steerId || ""), b.outcome);
+      } catch (e) {
+        send(res, 400, { error: e.message, code: "bad_outcome" });
+        return;
+      }
+      saveState(state);
+      send(res, 200, state.scoreboard);
       return;
     }
     if (req.method === "GET" && url.pathname === "/api/health") {
