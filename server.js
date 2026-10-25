@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { compile, defaultState, PRESETS } from "./lib/compile.js";
 import { LIMITS, rejectIfOver } from "./lib/limits.js";
 import { distill, lemonadeHealth } from "./lib/distill.js";
-import { selectProfile } from "./lib/model_side.js";
+import { selectProfile, validateProfiles } from "./lib/model_side.js";
 import { emptyBoard, pickSteer, record } from "./lib/scoreboard.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -96,6 +96,10 @@ function mergeState(body) {
   if ("dump" in (body || {})) rejectIfOver("Dump", next.dump, LIMITS.dumpChars);
   if ("intent" in (body || {})) rejectIfOver("Today", next.intent, LIMITS.intentChars);
   if ("name" in (body || {})) rejectIfOver("Name", next.name, LIMITS.nameChars);
+  if ("modelProfiles" in (body || {})) {
+    const bad = validateProfiles(body.modelProfiles);
+    if (bad) throw Object.assign(new Error(bad), { status: 400, code: "bad_profiles" });
+  }
   return next;
 }
 

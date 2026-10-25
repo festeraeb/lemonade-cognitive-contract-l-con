@@ -29,13 +29,23 @@ L-con calls only two Lemonade (OpenAI-compatible) endpoints, relative to the con
 
 It does not use Lemonade's health, stats, load or unload endpoints, and it sends no `Authorization` header (so it will not work against a Lemonade started with an API key).
 
+## Model side (v2)
+
+The full design is in [docs/TWO_SIDED_CONTRACT.md](docs/TWO_SIDED_CONTRACT.md).
+
+`state.modelProfiles` (set with `PUT /api/state`) is a list of `{id, match: [globs], steers: [{id, text}]}`. The proxy picks a profile from the request's `model` field: an exact name match first, otherwise the longest matching glob. It adds one `Model notes` line to the contract and reports the chosen steer id in the `X-L-Con-Steer` response header.
+
+`GET /api/scoreboard` returns the counts. `POST /api/scoreboard` with `{model, steerId, outcome}` records one outcome: `helped`, `neutral` or `hurt` (anything else is a 400). Steers with fewer than 5 samples are tried first; after that the steer with the best Wilson lower bound wins, per exact model.
+
+The effect of v2 on answer quality is not yet measured.
+
 ## Tests
 
 ```bash
 npm test      # node --test test/*.test.js ; no dependencies
 ```
 
-28 tests (compile/limits, distill against a stub HTTP server, the proxy as a spawned server in front of a stub upstream). Last run: 28 pass, 0 fail, Node v22.23.3. `LCON_DATA_DIR` overrides where `state.json` is stored (the tests use a temp dir).
+The tests cover compile/limits, distill (against a stub HTTP server), the proxy (a spawned server in front of a stub upstream), model profiles and the scoreboard; run `npm test` for the current count. `LCON_DATA_DIR` overrides where `state.json` is stored (the tests use a temp dir).
 
 ## Measured: with and without the contract (Lemonade 11.9.0, Qwen3-14B Q4_0, CPU)
 
