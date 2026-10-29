@@ -35,7 +35,7 @@ It does not use Lemonade's health, stats, load or unload endpoints, and it sends
 npm test      # node --test test/*.test.js ; no dependencies
 ```
 
-28 tests (compile/limits, distill against a stub HTTP server, the proxy as a spawned server in front of a stub upstream). Last run: 28 pass, 0 fail, Node v22.23.3. `LCON_DATA_DIR` overrides where `state.json` is stored (the tests use a temp dir).
+60 tests (compile/limits, distill against a stub HTTP server, the proxy as a spawned server in front of a stub upstream, the upstream setting, streaming pass-through). Last run: 60 pass, 0 fail, Node v22.23.3 on Linux and Node v24.22.1 on Windows 11. `LCON_DATA_DIR` overrides where `state.json` is stored (the tests use a temp dir).
 
 ## Measured: with and without the contract (Lemonade 11.9.0, Qwen3-14B Q4_0, CPU)
 
@@ -65,7 +65,7 @@ What the numbers show: the contract added 173 prompt tokens in all three prompts
 - Latency is not a clean comparison. Prompt 1 with the contract took 61.1 s against 29.2 s for the baseline while generation speed was the same (2.4 vs 2.5 tok/s); I did not investigate why, and did not repeat it. The other two prompts differ by under 1 s.
 - Prompt-token counts include the model's chat template, so the contract's own cost is the difference (173), not the total.
 - If a contract exceeds 1400 characters it is cut off at the end, which removes the final "task wins" precedence sentence (covered by a test).
-- Proxy does not stream (it buffers the whole upstream body); no upstream auth; the default upstream in code is the author's own setup, not a Lemonade default.
+- No upstream auth: L-con sends no `Authorization` header, so it does not work against a Lemonade started with an API key.
 - The demo run used one Lemonade server; other models, GPUs/NPU backends were not tried.
 
 ## 2. Prerequisites
@@ -74,6 +74,18 @@ What the numbers show: the contract added 173 prompt tokens in all three prompts
 - A reachable **OpenAI-compatible base URL** for the *distill* step (any Lemonade, vLLM, llama.cpp, OpenRouter, etc.). The **proxy itself** can talk to *any* OpenAI-compatible target.
 
 ---
+
+## Which Lemonade does it talk to
+
+Without any setting it uses Lemonade's own default, `http://127.0.0.1:13305/api/v1`. To point it elsewhere without touching `state.json`:
+
+```bash
+LCON_UPSTREAM=127.0.0.1:8000 npm start          # bare address: /api/v1 is added
+LCON_UPSTREAM=http://host:13305/api/v1 npm start # or a full base
+LCON_MODEL=Qwen3-14B-GGUF npm start              # model used when a request names none
+```
+
+A saved `state.json` (the panel's Lemonade address) overrides the variable. If Lemonade cannot be reached, `GET /api/health` returns `lemonade.message` naming the exact URL it tried.
 
 ## 3. Install
 
@@ -106,7 +118,7 @@ L-con persists state to `data/state.json`. You can configure via the panel (reco
   "intent": "Scientific grounding. Keep me on the rails.",
   "knobs": { "grounding": 86, "scaffolding": 42, "wit": 72, "jokes": 70 },
   "lemonade": {
-    "base": "http://127.0.0.1:13321/v1",
+    "base": "http://127.0.0.1:13305/api/v1",
     "model": "nauti-recovery"
   }
 }

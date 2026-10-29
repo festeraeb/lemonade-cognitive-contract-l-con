@@ -97,7 +97,7 @@ Binding is loopback only. The measurement run used the proxy against live Lemona
 - Over-cap `PUT /api/state`, `/api/compile` and `/api/distill` fields return 413 `too_much`; over-cap proxy payloads return 400 `too_much` (README corrected from 413; both verified by tests).
 - The proxy has no auth of its own and does not forward the client's `Authorization` header upstream (test-asserted).
 - Measurement is 3 prompts, 1 run each, CPU-only at about 2.5 tok/s; no recorded demo exists yet.
-- The README default upstream (`http://127.0.0.1:13321/v1`, model `nauti-recovery`) is the author's own setup, not a Lemonade default.
+- The default upstream is Lemonade's own `http://127.0.0.1:13305/api/v1` (override with `LCON_UPSTREAM`); the default model name `nauti-recovery` is the author's own.
 - Lemonade-specific features (stats, load/unload, health) are not used, so the integration is a thin OpenAI-compatible one.
 - The Nauti-Monitor and Ori fixes are on unmerged branches and are not part of this submission or claimed as merged.
 

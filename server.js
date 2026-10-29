@@ -154,14 +154,19 @@ async function proxyChat(req, res, state) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  const text = await upstream.text();
   res.writeHead(upstream.status, {
     "Content-Type": upstream.headers.get("content-type") || "application/json",
     "Access-Control-Allow-Origin": "*",
+    "Cache-Control": "no-cache",
     "X-L-Con-Chars": String(compiled.chars),
     ...(steer ? { "X-L-Con-Steer": steer.id } : {}),
   });
-  res.end(text);
+  // Pass the body through as it arrives, so "stream": true reaches the client chunk by chunk.
+  if (!upstream.body) { res.end(); return; }
+  try {
+    for await (const chunk of upstream.body) { if (!res.write(chunk)) await new Promise((r) => res.once("drain", r)); }
+  } catch { /* upstream dropped mid-body: end what the client has */ }
+  res.end();
 }
 
 const server = http.createServer(async (req, res) => {
