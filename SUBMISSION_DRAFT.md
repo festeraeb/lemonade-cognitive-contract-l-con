@@ -93,7 +93,7 @@ Binding is loopback only. The measurement run used the proxy against live Lemona
 - Over-cap contract truncation drops the final "task wins" precedence sentence (documented by a test, not fixed).
 - No quality evaluation; the benefit is a HYPOTHESIS.
 - The proxy does not support streaming specially: it reads the whole upstream body with `upstream.text()` before replying, so `stream: true` is not streamed incrementally (from reading `server.js`, not tested).
-- No upstream auth: it sends no `Authorization` header, so it will not work against a Lemonade started with `LEMONADE_API_KEY`.
+- Upstream auth: set `LEMONADE_API_KEY` in L-con's environment and it sends `Authorization: Bearer <key>` upstream; unset, it sends none. There is no key field in the panel yet.
 - Over-cap `PUT /api/state`, `/api/compile` and `/api/distill` fields return 413 `too_much`; over-cap proxy payloads return 400 `too_much` (README corrected from 413; both verified by tests).
 - The proxy has no auth of its own and does not forward the client's `Authorization` header upstream (test-asserted).
 - Measurement is 3 prompts, 1 run each, CPU-only at about 2.5 tok/s; no recorded demo exists yet.

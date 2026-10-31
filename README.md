@@ -27,7 +27,7 @@ L-con calls only two Lemonade (OpenAI-compatible) endpoints, relative to the con
 | `POST {base}/chat/completions` | proxy (`server.js`) and the distill call (`lib/distill.js`) |
 | `GET {base}/models` | `/v1/models` passthrough and `/api/health` |
 
-It does not use Lemonade's health, stats, load or unload endpoints, and it sends no `Authorization` header (so it will not work against a Lemonade started with an API key).
+It does not use Lemonade's health, stats, load or unload endpoints. If `LEMONADE_API_KEY` is set in L-con's environment, it sends `Authorization: Bearer <key>` upstream on chat, distill and model-list calls, so it works against a Lemonade started with an API key; when the variable is unset it sends no `Authorization` header. The key is never logged or returned by `GET /api/state` (asserted by `test/upstream_auth.test.js`).
 
 ## Model side (v2)
 
@@ -102,7 +102,7 @@ To change the port or listen address:
 LCON_PORT=8080 node server.js
 ```
 
-The server binds `127.0.0.1` by default — only loopback. If you want LAN or internet access, terminate at a reverse proxy (nginx, caddy, traefik, …) — **do not** expose this directly: the proxy has no authentication of its own, so anyone who can reach it can send requests to your configured upstream. It does not forward the client's `Authorization` header upstream (it sends only `Content-Type`; asserted by `test/proxy.test.js`).
+The server binds `127.0.0.1` by default — only loopback. If you want LAN or internet access, terminate at a reverse proxy (nginx, caddy, traefik, …) — **do not** expose this directly: the proxy has no authentication of its own, so anyone who can reach it can send requests to your configured upstream. It does not forward the client's `Authorization` header upstream (it sends only `Content-Type`, plus its own bearer key when `LEMONADE_API_KEY` is set; asserted by `test/proxy.test.js` and `test/upstream_auth.test.js`).
 
 ---
 

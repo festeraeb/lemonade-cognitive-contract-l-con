@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { compile, defaultState, PRESETS } from "./lib/compile.js";
 import { LIMITS, rejectIfOver } from "./lib/limits.js";
-import { distill, lemonadeHealth } from "./lib/distill.js";
+import { distill, lemonadeHealth, upstreamHeaders } from "./lib/distill.js";
 import { selectProfile, validateProfiles } from "./lib/model_side.js";
 import { emptyBoard, pickSteer, record } from "./lib/scoreboard.js";
 
@@ -155,7 +155,7 @@ async function proxyChat(req, res, state) {
   };
   const upstream = await fetch(`${base}/chat/completions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: upstreamHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(payload),
   });
   const text = await upstream.text();
@@ -247,10 +247,12 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && (url.pathname === "/v1/models" || url.pathname === "/api/v1/models")) {
       const state = loadState();
       const base = String(state.lemonade.base || "").replace(/\/$/, "");
-      const upstream = await fetch(`${base}/models`);
+      const upstream = await fetch(`${base}/models`, {
+        headers: upstreamHeaders(),
+      });
       const text = await upstream.text();
       res.writeHead(upstream.status, {
-        "Content-Type": "application/json",
+        "Content-Type": upstream.headers.get("content-type") || "application/json",
         "Access-Control-Allow-Origin": "*",
       });
       res.end(text);
